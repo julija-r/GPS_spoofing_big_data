@@ -3,18 +3,16 @@ import numpy as np
 import time
 import multiprocessing as mp
 import math
-import matplotlib.pyplot as plt
-from tqdm import tqdm
 from matplotlib import cm
 from matplotlib.colors import Normalize
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # FUNCTIONS
 
 # 1. Functions for Data Cleaning
 
-
-def clean_data(df):
+def clean_data(df): # for initial data pre-processing
     df = df[~df['Navigational status'].isin(['Moored', 'At anchor', 'Reserved for future use'])]
     df = df.dropna(subset=['MMSI', 'Latitude', 'Longitude', 'Timestamp', 'SOG', 'COG']).copy()
     df = df[(df['Latitude'] >= -90) & (df['Latitude'] <= 90) & (df['Longitude'] >= -180) & (df['Longitude'] <= 180)]
@@ -26,7 +24,7 @@ def clean_data(df):
     df = df.dropna(subset=['Latitude', 'Longitude', 'SOG', 'COG'])
     return df
 
-
+# used for
 def process_chunk(chunk):
     chunk.columns = chunk.columns.str.strip()
     chunk = chunk.rename(columns={'# Timestamp': 'Timestamp'})
@@ -175,7 +173,6 @@ def benchmark_chunk_sizes(file_path, chunk_sizes):
     return pd.DataFrame(results)
 
 def test_parallel_workers(file_path):
-    import matplotlib.pyplot as plt
 
     print("Testing different number of parallel workers...")
 
