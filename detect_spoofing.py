@@ -3,7 +3,6 @@ import numpy as np
 import time
 import multiprocessing as mp
 import math
-from matplotlib import cm
 from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -229,6 +228,28 @@ def test_parallel_workers(file_path): # used to compare execution time using dif
     plt.savefig("speedup_vs_workers.png")
     plt.close()
 
+def process_large_file_sequential_simple(file_path):
+    print("Running Sequential Processing...")
+    start_time = time.time()
+
+    df = pd.read_csv(file_path)
+    df.columns = df.columns.str.strip()
+    df = df.rename(columns={'# Timestamp': 'Timestamp'})
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'], format="%d/%m/%Y %H:%M:%S", errors='coerce')
+    df = clean_data(df)
+
+    spoofed_data = []
+    grouped = df.groupby('MMSI')
+    for _, group in tqdm(grouped, desc="Processing vessel groups (Sequential)", unit="group"):
+        spoofed = predict_next_location(group)
+        if not spoofed.empty:
+            spoofed_data.append(spoofed)
+
+    sequential_time = time.time() - start_time
+    print(f"Sequential processing completed in {sequential_time:.2f} seconds.")
+    return pd.concat(spoofed_data, ignore_index=True), sequential_time
+
+
 
 # visualisation functions
 
@@ -244,27 +265,6 @@ def plot_spoofing_events(spoofed_df):
     plt.savefig('spoofing_events_plot.png')
     plt.close()
 
-
-def plot_spoofing_distribution_over_time(spoofed_df):
-    # Group spoofing events by the hour
-    spoofed_df['Hour'] = spoofed_df['Timestamp'].dt.floor('H')
-    counts = spoofed_df.groupby('Hour').size()
-
-    # Plot
-    plt.figure(figsize=(14, 6))
-    plt.bar(counts.index, counts.values, color='red')
-    plt.xlabel('Hour of Day')
-    plt.ylabel('Number of Spoofing Events')
-    plt.title('Distribution of GPS Spoofing Events Over Time')
-
-    # Format x-axis to show every 2 hours
-    xticks = pd.date_range(start=counts.index.min(), end=counts.index.max(), freq='2H')
-    xticklabels = [t.strftime('%H:%M') for t in xticks]
-    plt.xticks(ticks=xticks, labels=xticklabels, rotation=45)
-
-    plt.tight_layout()
-    plt.savefig('spoofing_events_distribution_over_time.png')
-    plt.close()
 
 
 def plot_spoofing_clusters(spoofed_df):
@@ -339,19 +339,23 @@ def plot_benchmark_results(df):
     plt.savefig("chunk_size_benchmark_plot.png")
     plt.close()
 
-
 def plot_processing_comparison(sequential_time, parallel_time):
+    speedup = sequential_time / parallel_time
     plt.figure(figsize=(8, 5))
-    plt.bar(['Sequential', 'Parallel'], [sequential_time, parallel_time], color=['blue', 'green'])
-    plt.ylabel('Processing Time (seconds)')
-    plt.title('Sequential vs. Parallel Processing Time')
+    plt.bar(['Speedup'], [speedup], color='purple')
+    plt.ylabel('Speedup (Sequential / Parallel)')
+    plt.title('Speedup of Parallel vs Sequential Processing')
     plt.tight_layout()
-    plt.savefig('processing_comparison.png')
+    plt.savefig('processing_speedup_comparison.png')
     plt.close()
 
 if __name__ == '__main__':
     file_path = r"C:\Users\Kompiuteris\Desktop\Data Science\2 semester\Big Data\aisdk-2025-03-05.csv"
-    #Testing first
+
+    # Simple sequential procedure
+    spoofed_data_seq, sequential_time = process_large_file_sequential_simple(file_path)
+
+    #Testing different parameters
     chunk_sizes = [60000, 80000, 100000, 12000, 140000]
     benchmark_results = benchmark_chunk_sizes(file_path, chunk_sizes)
     benchmark_results.to_csv("chunk_size_benchmark.csv", index=False)
@@ -368,7 +372,7 @@ if __name__ == '__main__':
     spoofed_data_parallel.to_csv("spoofed_data_parallel.csv", index=False)
 
     plot_spoofing_events(spoofed_data_parallel)
-    plot_spoofing_distribution_over_time(spoofed_data_parallel)
     plot_spoofing_clusters(spoofed_data_parallel)
 
-
+    # Compare sequential vs parallel
+    plot_processing_comparison(sequential_time, parallel_time)
