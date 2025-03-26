@@ -25,14 +25,14 @@ def clean_data(df): # for initial data pre-processing
     return df
 
 # used for
-def process_chunk(chunk):
+def process_chunk(chunk): # for more efficient data loading and cleaning
     chunk.columns = chunk.columns.str.strip()
     chunk = chunk.rename(columns={'# Timestamp': 'Timestamp'})
     chunk['Timestamp'] = pd.to_datetime(chunk['Timestamp'], format="%d/%m/%Y %H:%M:%S", errors='coerce')
     return clean_data(chunk)
 
 
-def parallel_clean_data(file_path, chunksize=100000):
+def parallel_clean_data(file_path, chunksize=100000): # for more efficient data loading and cleaning
     pool = mp.Pool(mp.cpu_count() - 1)
     cleaned_chunks = []
 
@@ -50,7 +50,7 @@ def parallel_clean_data(file_path, chunksize=100000):
 
 
 # 2. Functions for Calculations and Analysis
-def calculate_distance(lat1, lon1, lat2, lon2):
+def calculate_distance(lat1, lon1, lat2, lon2): #calculates distance between two coordinates
     R = 6371
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
@@ -60,7 +60,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def great_circle_destination(lon1, lat1, bearing, dist, R=6371):
+def great_circle_destination(lon1, lat1, bearing, dist, R=6371): #predict new coordinates
     lat2 = math.asin(math.sin(lat1) * math.cos(dist / R) +
                      math.cos(lat1) * math.sin(dist / R) * math.cos(bearing))
     lon2 = lon1 + math.atan2(math.sin(bearing) * math.sin(dist / R) * math.cos(lat1),
@@ -68,14 +68,14 @@ def great_circle_destination(lon1, lat1, bearing, dist, R=6371):
     return lon2, lat2
 
 
-def predict_next_location(df):
+def predict_next_location(df): # detects spoofing events based on mismatch between predicted and reported coordinates
     spoofed_entries = []
 
-    for mmsi, group in df.groupby('MMSI'):
+    for mmsi, group in df.groupby('MMSI'): # grouping by vessel
         group = group.sort_values(by='Timestamp').reset_index(drop=True)
 
         i = 1
-        last_valid = group.iloc[0]
+        last_valid = group.iloc[0] # to make sure we don't use spoofed coordinates for prediction
 
         while i < len(group):
             current = group.iloc[i]
