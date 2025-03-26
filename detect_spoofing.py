@@ -81,7 +81,7 @@ def predict_next_location(df): # detects spoofing events based on mismatch betwe
             current = group.iloc[i]
 
             time_diff = (current['Timestamp'] - last_valid['Timestamp']).total_seconds() / 3600
-            if time_diff <= 0:
+            if time_diff <= 0: # an additional safety check for illogical timestamps
                 i += 1
                 continue
 
@@ -100,7 +100,7 @@ def predict_next_location(df): # detects spoofing events based on mismatch betwe
                 lat_pred, lon_pred, current['Latitude'], current['Longitude']
             )
 
-            if actual_distance > 18.52:
+            if actual_distance > 18.52: # coordinates are flagged as spoofing if = the difference is nore than 10 NM
                 spoofed_entries.append({
                     'Prev_Latitude': last_valid['Latitude'],
                     'Prev_Longitude': last_valid['Longitude'],
@@ -115,12 +115,12 @@ def predict_next_location(df): # detects spoofing events based on mismatch betwe
                     'Distance_Error_km': actual_distance
                 })
 
-                # Update last_valid to current + 1 if possible
+                # update last_valid to current + 1 if possible
                 if i + 1 < len(group):
                     last_valid = group.iloc[i + 1]
-                    i += 2  # Skip the spoofed one and move to the one after
+                    i += 2  # skip the spoofed one and move to the one after
                 else:
-                    break  # No more data
+                    break
             else:
                 last_valid = current
                 i += 1
@@ -132,7 +132,7 @@ def process_large_file_parallel(file_path, num_workers=None):
     if num_workers is None:
         num_workers = mp.cpu_count() - 1
 
-    print(f"🔧 Using {num_workers} worker(s) for parallel processing...")
+    print(f" Using {num_workers} worker(s) for parallel processing...")
 
     start_time = time.time()
     df = parallel_clean_data(file_path)
@@ -142,7 +142,7 @@ def process_large_file_parallel(file_path, num_workers=None):
 
     grouped = [group for _, group in df.groupby('MMSI')]
     results = [pool.apply_async(predict_next_location, (group,)) for group in grouped]
-
+    #the below is to monitor while code is running :)
     with tqdm(total=len(results), unit='group', desc='Processing vessel groups (Parallel)') as pbar:
         for r in results:
             spoofed_data.append(r.get())
@@ -151,12 +151,11 @@ def process_large_file_parallel(file_path, num_workers=None):
     pool.close()
     pool.join()
     parallel_time = time.time() - start_time
-    print(f"✅ Parallel processing completed in {parallel_time:.2f} seconds.")
+    print(f" Parallel processing completed in {parallel_time:.2f} seconds.")
 
     return pd.concat(spoofed_data, ignore_index=True), parallel_time
 
-
-
+# the below function is used to test execution time using different chunk sizes for data loading and cleaning
 def benchmark_chunk_sizes(file_path, chunk_sizes):
     results = []
 
@@ -172,7 +171,7 @@ def benchmark_chunk_sizes(file_path, chunk_sizes):
 
     return pd.DataFrame(results)
 
-def test_parallel_workers(file_path):
+def test_parallel_workers(file_path): # used to compare execution time using different number of cpu's
 
     print("Testing different number of parallel workers...")
 
@@ -352,22 +351,24 @@ def plot_processing_comparison(sequential_time, parallel_time):
 
 if __name__ == '__main__':
     file_path = r"C:\Users\Kompiuteris\Desktop\Data Science\2 semester\Big Data\aisdk-2025-03-05.csv"
+    #Testing first
     chunk_sizes = [60000, 80000, 100000, 12000, 140000]
-
     benchmark_results = benchmark_chunk_sizes(file_path, chunk_sizes)
     benchmark_results.to_csv("chunk_size_benchmark.csv", index=False)
     print("\nBenchmark complete! Results saved to chunk_size_benchmark.csv")
     plot_benchmark_results(benchmark_results)
 
+    test_parallel_workers(file_path)
+
+    #Final optimized version
     print("Running Parallel Processing...")
     spoofed_data_parallel, parallel_time = process_large_file_parallel(file_path)
 
     print(f"Total spoofing events detected (Parallel): {len(spoofed_data_parallel)}")
-    # print(spoofed_data_parallel.drop_duplicates())
     spoofed_data_parallel.to_csv("spoofed_data_parallel.csv", index=False)
 
     plot_spoofing_events(spoofed_data_parallel)
     plot_spoofing_distribution_over_time(spoofed_data_parallel)
     plot_spoofing_clusters(spoofed_data_parallel)
 
-    test_parallel_workers(file_path)
+
